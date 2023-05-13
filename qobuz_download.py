@@ -21,6 +21,13 @@ headers = {
 }
 
 
+def secure_filename(filename):
+    for char in filename:
+        if char in ['\\', '/', ':', '*', '?', '"', '<', '>', '|']:
+            filename = filename.replace(char, '_')
+    return filename
+
+
 def get_album_info(album_id) -> dict:
     """
     获取专辑信息
@@ -58,13 +65,23 @@ def download(album_info, track_number):
     file_url_response = requests.post('https://www.qobuz.com/api.json/0.2/track/getFileUrl', params=params,
                                       headers=headers, stream=True)
     file_url = json.loads(file_url_response.text)['url']
-    filename = f'{track_number:02d} - {track_title}.flac'
-    print(f'正在下载：{filename}')
-    stream = requests.get(file_url, stream=True)
-    with open(filename, 'wb') as f:
-        f.write(stream.content)
-    add_tag(filename, album_info, track)
-    print(f'下载完成：{filename}')
+
+    filename = secure_filename(f'{track_number:02d}-{track_title}.flac')
+    spec = '{}-{}'.format(track['maximum_bit_depth'], track['maximum_sampling_rate'])
+    album_artist = album_info['artist']['name']
+    album_title = album_info['title']
+    year = album_info['release_date_original'][:4]
+    dest_dir = os.path.join(f'{album_artist}', f'{album_title} ({year}) [{spec}]')
+    if not os.path.exists(dest_dir):
+        os.makedirs(dest_dir)
+    dest_file = os.path.join(dest_dir, filename)
+    if not os.path.exists(dest_file):
+        print(f'正在下载：{dest_file}')
+        stream = requests.get(file_url, stream=True)
+        with open(dest_file, 'wb') as f:
+            f.write(stream.content)
+        add_tag(dest_file, album_info, track)
+        print(f'下载完成：{dest_file}')
 
 
 def add_tag(filename, album_info, track):
@@ -81,19 +98,20 @@ def add_tag(filename, album_info, track):
     tags['albumartist'] = album_info['artist']['name']
     tags['album'] = album_info['title']
     tags['date'] = album_info['release_date_original']
-    tags['copyright'] = album_info['copyright']
     tags['comment'] = album_info['url']
     tags['upc'] = album_info['upc']
-    tags['genre'] = album_info['genre']['name']
+    tags['grouping'] = album_info['genre']['name']
+    tags['genre'] = album_info['genres_list'][0]
     tags['releasetype'] = album_info['release_type']
-    tags['totaldiscs'] = str(album_info['media_count'])
-    tags['totaltracks'] = str(album_info['tracks_count'])
+    tags['disctotal'] = str(album_info['media_count'])
+    tags['tracktotal'] = str(album_info['tracks_count'])
     tags['artist'] = track['performer']['name']
     tags['title'] = track['title']
     tags['tracknumber'] = str(track['track_number'])
     tags['discnumber'] = str(track['media_number'])
     tags['composer'] = track['composer']['name']
-    tags['performers'] = track['performers']
+    tags['copyright'] = track['copyright']
+    tags['performers'] = track['performers'].replace(' - ', '\n')
     tags['isrc'] = track['isrc']
     url = album_info['image']['large'].replace('_600.jpg', '_max.jpg')
     response = requests.get(url)
@@ -109,9 +127,13 @@ def add_tag(filename, album_info, track):
 parser = argparse.ArgumentParser()
 parser.add_argument("-a", dest="album")
 parser.add_argument("-s", dest="single")
+parser.add_argument("-i", dest="info")
 args = parser.parse_args()
 
-if args.single:
+if args.info:
+    album_info = get_album_info(args.info)
+    print(json.dumps(album_info, ensure_ascii=False, indent=2))
+elif args.single:
     album_info = get_album_info(args.single)
     tracks_info = album_info['tracks']['items']
     album_artist = album_info['artist']['name']
@@ -120,7 +142,7 @@ if args.single:
     for track in tracks_info:
         track_number = track['track_number']
         track_title = track['title']
-        print(f'{track_number:02d} - {track_title}')
+        print(f'{track_number:02d}-{track_title}')
     while 1:
         track_number = input('\n输入要下载的音轨号，输入0结束下载：')
         if not track_number:
