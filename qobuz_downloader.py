@@ -177,11 +177,20 @@ def download(album_info: dict, track_info: dict):
                 for chunk in stream.iter_content(chunk_size=1024):
                     f.write(chunk)
                     bar.update(len(chunk))
+        if os.path.get_size(temp_file) != file_size:
+            os.remove(temp_file)
+            logger.error('Downloaded file size does not match the expected size. Retrying...')
+            download(album_info, track_info)
+            return
         os.rename(temp_file, file)
         try:
             add_tags(file, album_info, track_info)
         except Exception as e:
             logger.error(f'An error occurred while adding tags: {e}')
+
+
+def new_padding(info):
+    return 8192
 
 
 def add_tags(filename, album_info, track_info):
@@ -200,24 +209,24 @@ def add_tags(filename, album_info, track_info):
     tags['album'] = album_title
     tags['albumartist'] = album_artist
     tags['albumid'] = album_info.get('id', '')
-    tags['comment'] = album_info.get('url', '')
-    tags['date'] = album_info.get('release_date_original', '')
-    tags['releasetype'] = album_info.get('release_type', '')
-    tags['upc'] = album_info.get('upc', '')
-    tags['disctotal'] = str(album_info.get('media_count', ''))
-    tags['tracktotal'] = str(album_info.get('tracks_count', ''))
-    tags['grouping'] = album_info.get('genre', {}).get('name', '')
-    tags['label'] = album_info.get('label', {}).get('name', '')
-    tags['genre'] = album_info.get('genres_list', [''])[0]
-    tags['title'] = get_title(track_info)
-    tags['copyright'] = track_info.get('copyright', '')
-    tags['isrc'] = track_info.get('isrc', '')
-    tags['trackid'] = str(track_info.get('id', ''))
-    tags['discnumber'] = str(track_info.get('media_number', ''))
-    tags['tracknumber'] = str(track_info.get('track_number', ''))
     tags['artist'] = track_info.get('performer', {}).get('name', '')
+    tags['comment'] = album_info.get('url', '')
     tags['composer'] = track_info.get('composer', {}).get('name', '')
+    tags['copyright'] = track_info.get('copyright', '')
+    tags['date'] = album_info.get('release_date_original', '')
+    tags['discnumber'] = str(track_info.get('media_number', ''))
+    tags['disctotal'] = str(album_info.get('media_count', ''))
+    tags['genre'] = album_info.get('genres_list', [''])[0]
+    tags['grouping'] = album_info.get('genre', {}).get('name', '')
+    tags['isrc'] = track_info.get('isrc', '')
+    tags['label'] = album_info.get('label', {}).get('name', '')
     tags['performers'] = track_info.get('performers', '').replace('\r', '').replace(' - ', '\n')
+    tags['releasetype'] = album_info.get('release_type', '')
+    tags['title'] = get_title(track_info)
+    tags['trackid'] = str(track_info.get('id', ''))
+    tags['tracknumber'] = str(track_info.get('track_number', ''))
+    tags['tracktotal'] = str(album_info.get('tracks_count', ''))
+    tags['upc'] = album_info.get('upc', '')
     cover = os.path.join(get_dest_dir(album_artist, album_title), 'cover.jpg')
     download_cover(album_info, cover)
     picture = Picture()
@@ -226,7 +235,7 @@ def add_tags(filename, album_info, track_info):
     picture.data = open(cover, 'rb').read()
     flac.clear_pictures()
     flac.add_picture(picture)
-    flac.save()
+    flac.save(padding=new_padding)
 
 
 def download_albums(album_ids):
