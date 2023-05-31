@@ -38,7 +38,6 @@ def get_md5(input_file, bps):
     except:
         raise
 
-files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.flac')]
 
 for root, dirs, files in os.walk('.'):
     flac_files = [f for f in files if f.endswith('.flac')]

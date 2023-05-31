@@ -177,7 +177,7 @@ def download(album_info: dict, track_info: dict):
                 for chunk in stream.iter_content(chunk_size=1024):
                     f.write(chunk)
                     bar.update(len(chunk))
-        if os.path.get_size(temp_file) != file_size:
+        if os.path.getsize(temp_file) != file_size:
             os.remove(temp_file)
             logger.error('Downloaded file size does not match the expected size. Retrying...')
             download(album_info, track_info)
